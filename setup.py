@@ -6,7 +6,7 @@ setup(
     url='https://github.com/rtitle/neil-tut.git',
     author='Rob & Neil Title',
     author_email='rtitle@gmail.com',
-    description='A Neil Tut game',
+    description='Neil Tut games',
     packages=find_packages(),    
     install_requires=['pygame >= 1.9.6'],
 )
