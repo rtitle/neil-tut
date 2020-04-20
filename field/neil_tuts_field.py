@@ -118,11 +118,10 @@ class Score:
     def draw(self, screen):
         screen.blit(self.image, self.pos)
 
-class GameOver:
-    def __init__(self, font_name, font_size):
+class EndScreen:
+    def __init__(self, font_name, font_size, msg):
         self.font = pg.font.Font(font_name, font_size)
         self.font.set_bold(1)
-        msg = "Game Over"
         self.image = self.font.render(msg, 0, pg.Color("Yellow"))
         self.pos = self.image.get_rect().move(280, 280)
 
@@ -199,9 +198,10 @@ def main():
     player = Player("netut_standing.gif", "netut_walking_left.gif", "netut_walking_right.gif", "netut_climbing.gif", 5, 20, camera)
     score = Score(None, 40)
     health = Health(3, "netut_heart.gif")
-    game_over = GameOver(None, 60)
+    game_over = EndScreen(None, 60, "Game Over")
+    you_win = EndScreen(None, 60, "You Win!")
 
-    while health.health > 0:
+    while health.health > 0 and score.score < 100:
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return
@@ -250,7 +250,10 @@ def main():
         clock.tick(40)
 
     screen.fill(pg.Color("Black"))
-    game_over.draw(screen)
+    if health.health == 0:
+        game_over.draw(screen)
+    elif score.score == 100:
+        you_win.draw(screen)
     pg.display.update()
 
     if pg.mixer:
