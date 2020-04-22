@@ -22,16 +22,24 @@ class Player:
         self.camera = camera
         self.pos = self.image_standing.get_rect().move(200, Player.ground - 150)
         self.total_fall = 0
+        self.bought_item_left = None
+        self.bought_item_right = None
 
     def draw(self, direction, on_ladder, modal_active, screen):
         if direction < 0 and not modal_active:
             screen.blit(self.image_walking_left, self.pos)
+            if self.bought_item_left:
+                screen.blit(self.bought_item_left.image, self.pos.move(-30, 50))
         elif direction > 0 and not modal_active:
             screen.blit(self.image_walking_right, self.pos)
+            if self.bought_item_right:
+                screen.blit(self.bought_item_right.image, self.pos.move(80, 50))
         elif on_ladder and not modal_active:
             screen.blit(self.image_climbing, self.pos)
         else:
             screen.blit(self.image_standing, self.pos)
+            if self.bought_item_right:
+                screen.blit(self.bought_item_right.image, self.pos.move(80, 50))
 
     def climb(self, direction):
         self.pos = self.pos.move(0, self.climb_speed * direction)
@@ -51,6 +59,10 @@ class Player:
         if self.pos.bottom > fall_to:
             self.pos.bottom = fall_to
             self.total_fall = 0
+
+    def buy_item(self, left, right):
+        self.bought_item_left = left
+        self.bought_item_right = right
 
     def is_on_object(self, pos, frame=None):
         arr = self.camera.adjust(pos)
@@ -283,10 +295,11 @@ def main():
     background = GameObject(pg.Rect(0, 0, 800, 600), "green_hills_1.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
     platform = GameObject(pg.Rect(500, 245, 250, 160), "green_hills_platform.gif")
-    hammer = BuyObject(pg.Rect(700, 460, 50, 50), "hammer.png", "hammer", 10)
+    hammer_left = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_left.png", "hammer", 10)
+    hammer_right = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_right.png", "hammer", 10)
     game_objects = [background, ladder, platform]
     coins = {}
-    buy_objects = {1: [hammer]}
+    buy_objects = {1: [hammer_right]}
 
     camera = Camera(background, 10)
     player = Player("netut_standing.gif", "netut_walking_left.gif", "netut_walking_right.gif", "netut_climbing.gif", 5, 20, camera)
@@ -354,6 +367,7 @@ def main():
                     modal.dismiss()
                     if modal.buy_object.price <= score.score:
                         modal.buy_object.buy()
+                        player.buy_item(hammer_left, modal.buy_object)  # TODO
                         score.subtract(modal.buy_object.price)
                     else:
                         no_money_modal.set_active()
