@@ -26,20 +26,21 @@ class Player:
         self.bought_item_right = None
 
     def draw(self, direction, on_ladder, modal_active, screen):
-        if direction < 0 and not modal_active:
-            screen.blit(self.image_walking_left, self.pos)
-            if self.bought_item_left:
-                screen.blit(self.bought_item_left.image, self.pos.move(-30, 50))
-        elif direction > 0 and not modal_active:
-            screen.blit(self.image_walking_right, self.pos)
-            if self.bought_item_right:
-                screen.blit(self.bought_item_right.image, self.pos.move(80, 50))
-        elif on_ladder and not modal_active:
-            screen.blit(self.image_climbing, self.pos)
-        else:
-            screen.blit(self.image_standing, self.pos)
-            if self.bought_item_right:
-                screen.blit(self.bought_item_right.image, self.pos.move(80, 50))
+        if not modal_active:
+            if direction < 0:
+                screen.blit(self.image_walking_left, self.pos)
+                if self.bought_item_left:
+                    screen.blit(self.bought_item_left.image, self.pos.move(-30, 50))
+            elif direction > 0:
+                screen.blit(self.image_walking_right, self.pos)
+                if self.bought_item_right:
+                    screen.blit(self.bought_item_right.image, self.pos.move(80, 50))
+            elif on_ladder:
+                screen.blit(self.image_climbing, self.pos)
+            else:
+                screen.blit(self.image_standing, self.pos)
+                if self.bought_item_right:
+                    screen.blit(self.bought_item_right.image, self.pos.move(80, 50))
 
     def climb(self, direction):
         self.pos = self.pos.move(0, self.climb_speed * direction)
@@ -295,8 +296,8 @@ def main():
     background = GameObject(pg.Rect(0, 0, 800, 600), "green_hills_1.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
     platform = GameObject(pg.Rect(500, 245, 250, 160), "green_hills_platform.gif")
-    hammer_left = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_left.png", "hammer", 10)
-    hammer_right = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_right.png", "hammer", 10)
+    hammer_left = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_left.gif", "hammer", 10)
+    hammer_right = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_right.gif", "hammer", 10)
     game_objects = [background, ladder, platform]
     coins = {}
     buy_objects = {1: [hammer_right]}
