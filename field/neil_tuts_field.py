@@ -12,10 +12,17 @@ class Player:
     ground = 530
     sky = 100
 
-    def __init__(self, standing, walking_left, walking_right, climbing, climb_speed, fall_speed, camera):
+    def __init__(
+        self, standing, walking_left, walking_right,
+        standing_arm_up, walking_left_arm_up, walking_right_arm_up,
+        climbing, climb_speed, fall_speed, camera
+    ):
         self.image_standing = load_image(standing, 100, 150)
         self.image_walking_left = load_image(walking_left, 100, 150)
         self.image_walking_right = load_image(walking_right, 100, 150)
+        self.image_standing_arm_up = load_image(standing_arm_up, 100, 150)
+        self.image_walking_left_arm_up = load_image(walking_left_arm_up, 100, 150)
+        self.image_walking_right_arm_up = load_image(walking_right_arm_up, 100, 150)
         self.image_climbing = load_image(climbing, 120, 150)
         self.climb_speed = climb_speed
         self.fall_speed = fall_speed
@@ -24,23 +31,35 @@ class Player:
         self.total_fall = 0
         self.bought_item_left = None
         self.bought_item_right = None
+        self.bought_item_left_pos = None
+        self.bought_item_right_pos = None
+        self.arm_up = False
 
     def draw(self, direction, on_ladder, modal_active, screen):
         if not modal_active:
             if direction < 0:
-                screen.blit(self.image_walking_left, self.pos)
+                if self.arm_up:
+                    screen.blit(self.image_walking_left_arm_up, self.pos)
+                else:
+                    screen.blit(self.image_walking_left, self.pos)
                 if self.bought_item_left:
-                    screen.blit(self.bought_item_left.image, self.pos.move(-30, 50))
+                    screen.blit(self.bought_item_left.image, self.bought_item_left_pos)
             elif direction > 0:
-                screen.blit(self.image_walking_right, self.pos)
+                if self.arm_up:
+                    screen.blit(self.image_walking_right_arm_up, self.pos)
+                else:
+                    screen.blit(self.image_walking_right, self.pos)
                 if self.bought_item_right:
-                    screen.blit(self.bought_item_right.image, self.pos.move(80, 50))
+                    screen.blit(self.bought_item_right.image, self.bought_item_right_pos)
             elif on_ladder:
                 screen.blit(self.image_climbing, self.pos)
             else:
-                screen.blit(self.image_standing, self.pos)
+                if self.arm_up:
+                    screen.blit(self.image_standing_arm_up, self.pos)
+                else:
+                    screen.blit(self.image_standing, self.pos)
                 if self.bought_item_right:
-                    screen.blit(self.bought_item_right.image, self.pos.move(80, 50))
+                    screen.blit(self.bought_item_right.image, self.bought_item_right_pos)
 
     def climb(self, direction):
         self.pos = self.pos.move(0, self.climb_speed * direction)
@@ -49,6 +68,12 @@ class Player:
             self.pos.bottom = Player.ground
         elif self.pos.top < Player.sky:
             self.pos.top = Player.sky
+        if self.arm_up:
+            self.bought_item_left_pos = self.pos.move(-30, 25)
+            self.bought_item_right_pos = self.pos.move(80, 25)
+        else:
+            self.bought_item_left_pos = self.pos.move(-30, 50)
+            self.bought_item_right_pos = self.pos.move(80, 50)
 
     def fall(self, platform):
         self.pos = self.pos.move(0, self.fall_speed)
@@ -60,10 +85,29 @@ class Player:
         if self.pos.bottom > fall_to:
             self.pos.bottom = fall_to
             self.total_fall = 0
+        if self.arm_up:
+            self.bought_item_left_pos = self.pos.move(-30, 25)
+            self.bought_item_right_pos = self.pos.move(80, 25)
+        else:
+            self.bought_item_left_pos = self.pos.move(-30, 50)
+            self.bought_item_right_pos = self.pos.move(80, 50)
 
     def buy_item(self, left, right):
         self.bought_item_left = left
+        self.bought_item_left_pos = self.pos.move(-30, 50)
         self.bought_item_right = right
+        self.bought_item_right_pos = self.pos.move(80, 50)
+
+    def set_arm_up(self, arm_up):
+        changed = self.arm_up != arm_up
+        self.arm_up = arm_up
+        if changed and self.bought_item_left_pos and self.bought_item_right_pos:
+            if arm_up:
+                self.bought_item_left_pos = self.bought_item_left_pos.move(0, -25)
+                self.bought_item_right_pos = self.bought_item_right_pos.move(0, -25)
+            else:
+                self.bought_item_left_pos = self.bought_item_left_pos.move(0, 25)
+                self.bought_item_right_pos = self.bought_item_right_pos.move(0, 25)
 
     def is_on_object(self, pos, frame=None):
         arr = self.camera.adjust(pos)
@@ -88,6 +132,10 @@ class GameObject:
     def __init__(self, pos, name):
         self.pos = pos
         self.image = load_image(name, pos.width, pos.height)
+        self.active = True
+
+    def deactivate(self):
+        self.active = False
 
     def draw(self, camera, screen, frame = None):
         for o in camera.adjust(self.pos):
@@ -99,10 +147,6 @@ class BuyObject(GameObject):
         super().__init__(pos, name)
         self.price = price
         self.item_name = item_name
-        self.active = True
-
-    def buy(self):
-        self.active = False
 
 class Camera:
     def __init__(self, background, speed):
@@ -142,13 +186,8 @@ class Score:
         self.image = self.font.render(msg, 0, pg.Color("Yellow"))
         self.pos = self.image.get_rect().move(600, 10)
 
-    def update(self):
-        self.score = self.score + 1
-        msg = "Coins: %d" % self.score
-        self.image = self.font.render(msg, 0, pg.Color("Yellow"))
-
-    def subtract(self, amount):
-        self.score -= amount
+    def update(self, delta):
+        self.score += delta
         msg = "Coins: %d" % self.score
         self.image = self.font.render(msg, 0, pg.Color("Yellow"))
 
@@ -296,14 +335,19 @@ def main():
     background = GameObject(pg.Rect(0, 0, 800, 600), "green_hills_1.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
     platform = GameObject(pg.Rect(500, 245, 250, 160), "green_hills_platform.gif")
+    ring_box = GameObject(pg.Rect(900, 450, 75, 75), "coin_box.gif")
     hammer_left = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_left.gif", "hammer", 10)
     hammer_right = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_right.gif", "hammer", 10)
     game_objects = [background, ladder, platform]
     coins = {}
     buy_objects = {1: [hammer_right]}
+    ring_boxes = {}
 
     camera = Camera(background, 10)
-    player = Player("netut_standing.gif", "netut_walking_left.gif", "netut_walking_right.gif", "netut_climbing.gif", 5, 20, camera)
+    player = Player(
+        "netut_standing.gif", "netut_walking_left.gif", "netut_walking_right.gif", 
+        "netut_standing_arm_up.gif", "netut_walking_left_arm_up.gif", "netut_walking_right_arm_up.gif",
+        "netut_climbing.gif", 5, 20, camera)
     score = Score(None, 40)
     health = Health(3, "netut_heart.gif")
     modal = YesNoModal(pg.Rect(150, 100, 450, 200), None, 40)
@@ -324,6 +368,7 @@ def main():
         mouse_pos = pg.mouse.get_pos()
         direction = keystate[pg.K_RIGHT] - keystate[pg.K_LEFT]
         climb_direction = keystate[pg.K_DOWN] - keystate[pg.K_UP]
+        space_pressed = keystate[pg.K_SPACE]
 
         # move the camera
         if not modal.active and not no_money_modal.active:
@@ -342,13 +387,18 @@ def main():
                 coins[f] = []
                 for i in range(5):
                     coins[f].append(GameObject(pg.Rect(500 + (i * 50), 255, 40, 40), "netut_coin.gif"))
+
+            # populate infinite ring boxes
+            if f not in ring_boxes:
+                ring_boxes[f] = [ring_box]
+
             # display coins
             for c in coins[f]:
                 if player.is_on_coin(c, f):
                     if pg.mixer:
                         coin_sound.play()
                     coins[f].remove(c)
-                    score.update()
+                    score.update(1)
                 else:
                     c.draw(camera, screen, f)
             # display buy objects
@@ -358,6 +408,15 @@ def main():
                         o.draw(camera, screen, f)
                         if not modal.active and modal.buy_object != o and player.is_on_object(o.pos, f):
                             modal.set_active(o)
+            # display ring boxes
+            for o in ring_boxes[f]:
+                if player.is_on_object(o.pos, f) and player.arm_up and player.bought_item_left:
+                    if pg.mixer:
+                        coin_sound.play()
+                    ring_boxes[f].remove(o)
+                    score.update(10)
+                else:
+                    o.draw(camera, screen, f)
 
         # display buy modal
         if modal.active and modal.buy_object:
@@ -367,9 +426,9 @@ def main():
                 if modal.is_in_yes(mouse_pos[0], mouse_pos[1]):
                     modal.dismiss()
                     if modal.buy_object.price <= score.score:
-                        modal.buy_object.buy()
+                        modal.buy_object.deactivate()
                         player.buy_item(hammer_left, modal.buy_object)  # TODO
-                        score.subtract(modal.buy_object.price)
+                        score.update(-modal.buy_object.price)
                     else:
                         no_money_modal.set_active()
                 if modal.is_in_no(mouse_pos[0], mouse_pos[1]):
@@ -394,6 +453,9 @@ def main():
             health.lose_health()
             if pg.mixer:
                 grunt_sound.play()
+
+        # make the player punch
+        player.set_arm_up(space_pressed)
 
         # draw the player
         player.draw(direction, on_ladder, modal.active or no_money_modal.active, screen)
