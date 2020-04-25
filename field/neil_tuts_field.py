@@ -11,6 +11,8 @@ main_dir = os.path.split(os.path.abspath(__file__))[0]
 
 # TODO: classes should extend pg.sprite.Sprite and use pg.sprite.Group
 
+# TODO: interaction of camera and game objects feels a little clunky
+
 class Player:
     ground = 530
     sky = 100
@@ -116,8 +118,9 @@ class Player:
             arr = list(filter(lambda x: x[0] == frame, arr))
         return any(self.pos.colliderect(a[1]) for a in arr)
 
-    def is_on_ladder(self, ladder):
-        return self.is_on_object(ladder.pos.inflate(-50, -50))
+    def should_climb(self, ladder):
+        arr = self.camera.adjust(ladder.pos)
+        return any(self.pos.right > p[1].left+25 and self.pos.left < p[1].right-25 and self.pos.bottom > p[1].top and self.pos.top < p[1].bottom for p in arr)
 
     def is_above_platform(self, platform):
         arr = self.camera.adjust(platform.pos)
@@ -392,7 +395,7 @@ def main():
     no_money_modal = OkModal(pg.Rect(150, 100, 500, 150), None, 40, "You don't have enough coins.")
     game_over = EndScreen(None, 60, "Game Over")
     boss_time = EndScreen(None, 60, "Boss Time")
-    boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.png", "eggman_boss_right.png", 3, 5)
+    boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", 3, 5)
 
     while health.health > 0:
         click = False
@@ -488,14 +491,14 @@ def main():
 
         # make the player climb or fall
         if boss.active:
-            on_ladder = player.is_on_ladder(boss_ladder_left) or player.is_on_ladder(boss_ladder_right)
-            if on_ladder:
+            should_climb = player.should_climb(boss_ladder_left) or player.should_climb(boss_ladder_right)
+            if should_climb:
                 player.climb(climb_direction)
             else:
                 player.fall(None)
         else:
-            on_ladder = player.is_on_ladder(ladder)
-            if on_ladder:
+            should_climb = player.should_climb(ladder)
+            if should_climb:
                 player.climb(climb_direction)
             else:
                 player.fall(platform)
@@ -511,7 +514,7 @@ def main():
         player.set_arm_up(space_pressed)
 
         # draw the player
-        player.draw(direction, on_ladder, modal.active or no_money_modal.active, screen)
+        player.draw(direction, should_climb, modal.active or no_money_modal.active, screen)
 
         # draw the boss
         if boss.active:
@@ -522,7 +525,7 @@ def main():
         health.draw(screen)
 
         # Change to boss mode
-        if not boss.active and score.score >= 10:
+        if not boss.active and score.score >= 100:
             screen.fill(pg.Color("Black"))
             boss_time.draw(screen)
             boss.activate()
