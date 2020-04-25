@@ -9,6 +9,8 @@ import pygame as pg
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
+# TODO: classes should extend pg.sprite.Sprite and use pg.sprite.Group
+
 class Player:
     ground = 530
     sky = 100
@@ -126,6 +128,34 @@ class Player:
 
     def should_die(self):
         return self.total_fall >= 200
+
+class Boss:
+    def __init__(self, pos, left_name, right_name, speed, health):
+        self.pos = pos
+        self.left_image = load_image(left_name, pos.width, pos.height)
+        self.right_image = load_image(right_name, pos.width, pos.height)
+        self.speed = speed
+        self.health = health
+        self.direction = 1
+        self.active = False
+
+    def draw(self, screen):
+        img = self.right_image if self.direction == 1 else self.left_image
+        screen.blit(img, self.pos)
+
+    def move(self):
+        self.pos = self.pos.move(self.speed * self.direction, 0)
+        if self.pos.right > 800:
+            self.direction = -1
+        elif self.pos.left < 0:
+            self.direction = 1
+
+    def activate(self):
+        self.active = True
+
+    def hit(self):
+        self.health -= 1
+        return 1 if self.health == 0 else 0
 
 class GameObject:
     def __init__(self, pos, name):
@@ -322,7 +352,7 @@ def main():
         print("Warning, no sound")
         pg.mixer = None
 
-    pg.mixer = None
+    #pg.mixer = None
 
     coin_sound = load_sound("netut_coin_sound_2.wav")
     grunt_sound = load_sound("netut_grunt.wav")
@@ -362,7 +392,7 @@ def main():
     no_money_modal = OkModal(pg.Rect(150, 100, 500, 150), None, 40, "You don't have enough coins.")
     game_over = EndScreen(None, 60, "Game Over")
     boss_time = EndScreen(None, 60, "Boss Time")
-    boss = False
+    boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.png", "eggman_boss_right.png", 3, 5)
 
     while health.health > 0:
         click = False
@@ -381,19 +411,23 @@ def main():
 
         # move the camera or player
         if not modal.active and not no_money_modal.active:
-            if boss:
+            if boss.active:
                 player.move(direction, camera.speed)
             else:
                 if camera.move(direction):
                     # reset the buy modal so it pops up again
                     modal.buy_object = None
 
+        # move the boss
+        if boss.active:
+            boss.move()
+
         # display each static game object, including the background
         for g in game_objects:
             g.draw(camera, screen)
 
         # display each stateful game object
-        if not boss:
+        if not boss.active:
             for f in camera.visible_frames():
                 # populate infinite coins
                 if f not in coins:
@@ -453,7 +487,7 @@ def main():
                     no_money_modal.dismiss()
 
         # make the player climb or fall
-        if boss:
+        if boss.active:
             on_ladder = player.is_on_ladder(boss_ladder_left) or player.is_on_ladder(boss_ladder_right)
             if on_ladder:
                 player.climb(climb_direction)
@@ -479,14 +513,19 @@ def main():
         # draw the player
         player.draw(direction, on_ladder, modal.active or no_money_modal.active, screen)
 
+        # draw the boss
+        if boss.active:
+            boss.draw(screen)
+
         # draw the score and health
         score.draw(screen)
         health.draw(screen)
 
-        if not boss and score.score >= 10:
+        # Change to boss mode
+        if not boss.active and score.score >= 10:
             screen.fill(pg.Color("Black"))
             boss_time.draw(screen)
-            boss = True
+            boss.activate()
             game_objects = [background, boss_ladder_left, boss_ladder_right]
             coins = {}
             ring_boxes = {}
@@ -494,8 +533,14 @@ def main():
             player.reset_pos()
             camera.reset()
             pg.display.update()
+            if pg.mixer:
+                pg.mixer.music.fadeout(1000)
             pg.event.wait()
             pg.time.wait(3000)
+            if pg.mixer:
+                music = os.path.join(main_dir, "data", "boss_music.wav")
+                pg.mixer.music.load(music)
+                pg.mixer.music.play(-1)
 
         pg.display.update()
         clock.tick(40)
