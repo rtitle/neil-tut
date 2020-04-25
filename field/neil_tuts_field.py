@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 """ pygame.examples.neil_tuts_field
 
 This game has stuff you can buy and characters.
@@ -38,26 +39,20 @@ class Player:
     def draw(self, direction, on_ladder, modal_active, screen):
         if not modal_active:
             if direction < 0:
-                if self.arm_up:
-                    screen.blit(self.image_walking_left_arm_up, self.pos)
-                else:
-                    screen.blit(self.image_walking_left, self.pos)
+                img = self.image_walking_left_arm_up if self.arm_up else self.image_walking_left
+                screen.blit(img, self.pos)
                 if self.bought_item_left:
                     screen.blit(self.bought_item_left.image, self.bought_item_left_pos)
             elif direction > 0:
-                if self.arm_up:
-                    screen.blit(self.image_walking_right_arm_up, self.pos)
-                else:
-                    screen.blit(self.image_walking_right, self.pos)
+                img = self.image_walking_right_arm_up if self.arm_up else self.image_walking_right
+                screen.blit(img, self.pos)
                 if self.bought_item_right:
                     screen.blit(self.bought_item_right.image, self.bought_item_right_pos)
             elif on_ladder:
                 screen.blit(self.image_climbing, self.pos)
             else:
-                if self.arm_up:
-                    screen.blit(self.image_standing_arm_up, self.pos)
-                else:
-                    screen.blit(self.image_standing, self.pos)
+                img = self.image_standing_arm_up if self.arm_up else self.image_standing
+                screen.blit(img, self.pos)
                 if self.bought_item_right:
                     screen.blit(self.bought_item_right.image, self.bought_item_right_pos)
 
@@ -68,23 +63,32 @@ class Player:
             self.pos.bottom = Player.ground
         elif self.pos.top < Player.sky:
             self.pos.top = Player.sky
-        if self.arm_up:
-            self.bought_item_left_pos = self.pos.move(-30, 25)
-            self.bought_item_right_pos = self.pos.move(80, 25)
-        else:
-            self.bought_item_left_pos = self.pos.move(-30, 50)
-            self.bought_item_right_pos = self.pos.move(80, 50)
+        self.set_buy_item_pos()
 
     def fall(self, platform):
         self.pos = self.pos.move(0, self.fall_speed)
         self.total_fall += self.fall_speed
         # fall to the platform or the ground
-        fall_to = Player.ground
-        if self.is_above_platform(platform):
-            fall_to = platform.pos.top + 70
+        fall_to = platform.pos.top + 70 if platform and self.is_above_platform(platform) else Player.ground
         if self.pos.bottom > fall_to:
             self.pos.bottom = fall_to
             self.total_fall = 0
+        self.set_buy_item_pos()
+
+    def move(self, direction, speed):
+        self.pos = self.pos.move(speed * direction, 0)
+        if self.pos.right > 800:
+            self.pos.right = 800
+        elif self.pos.left < 0:
+            self.pos.left = 0
+        self.set_buy_item_pos()
+
+    def buy_item(self, left, right):
+        self.bought_item_left = left
+        self.bought_item_right = right
+        self.set_buy_item_pos()
+
+    def set_buy_item_pos(self):
         if self.arm_up:
             self.bought_item_left_pos = self.pos.move(-30, 25)
             self.bought_item_right_pos = self.pos.move(80, 25)
@@ -92,22 +96,17 @@ class Player:
             self.bought_item_left_pos = self.pos.move(-30, 50)
             self.bought_item_right_pos = self.pos.move(80, 50)
 
-    def buy_item(self, left, right):
-        self.bought_item_left = left
-        self.bought_item_left_pos = self.pos.move(-30, 50)
-        self.bought_item_right = right
-        self.bought_item_right_pos = self.pos.move(80, 50)
-
     def set_arm_up(self, arm_up):
         changed = self.arm_up != arm_up
         self.arm_up = arm_up
         if changed and self.bought_item_left_pos and self.bought_item_right_pos:
-            if arm_up:
-                self.bought_item_left_pos = self.bought_item_left_pos.move(0, -25)
-                self.bought_item_right_pos = self.bought_item_right_pos.move(0, -25)
-            else:
-                self.bought_item_left_pos = self.bought_item_left_pos.move(0, 25)
-                self.bought_item_right_pos = self.bought_item_right_pos.move(0, 25)
+            self.set_buy_item_pos()
+
+    def reset_pos(self):
+        self.pos = self.image_standing.get_rect().move(200, Player.ground - 150)
+
+    def reset_fall(self):
+        self.total_fall = 0
 
     def is_on_object(self, pos, frame=None):
         arr = self.camera.adjust(pos)
@@ -151,6 +150,7 @@ class BuyObject(GameObject):
 class Camera:
     def __init__(self, background, speed):
         self.speed = speed
+        self.background = background
         self.pos = background.pos
         self.frame = 0
 
@@ -173,6 +173,10 @@ class Camera:
           (self.frame + 1, rect.move(-self.pos.left + 800, 0))
         ]
         return list(filter(lambda x: x[1].left < 800 and x[1].right > 0, arr))
+
+    def reset(self):
+        self.pos = self.background.pos
+        self.frame = 0
 
     def visible_frames(self):
         return [self.frame - 1, self.frame, self.frame + 1]
@@ -318,7 +322,7 @@ def main():
         print("Warning, no sound")
         pg.mixer = None
 
-    #pg.mixer = None
+    pg.mixer = None
 
     coin_sound = load_sound("netut_coin_sound_2.wav")
     grunt_sound = load_sound("netut_grunt.wav")
@@ -334,10 +338,13 @@ def main():
 
     background = GameObject(pg.Rect(0, 0, 800, 600), "green_hills_1.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
+    boss_ladder_left = GameObject(pg.Rect(10, 280, 100, 250), "ladder3.gif")
+    boss_ladder_right = GameObject(pg.Rect(690, 280, 100, 250), "ladder3.gif")
     platform = GameObject(pg.Rect(500, 245, 250, 160), "green_hills_platform.gif")
     ring_box = GameObject(pg.Rect(900, 450, 75, 75), "coin_box.gif")
     hammer_left = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_left.gif", "hammer", 10)
     hammer_right = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_right.gif", "hammer", 10)
+
     game_objects = [background, ladder, platform]
     coins = {}
     buy_objects = {1: [hammer_right]}
@@ -351,11 +358,13 @@ def main():
     score = Score(None, 40)
     health = Health(3, "netut_heart.gif")
     modal = YesNoModal(pg.Rect(150, 100, 450, 200), None, 40)
+
     no_money_modal = OkModal(pg.Rect(150, 100, 500, 150), None, 40, "You don't have enough coins.")
     game_over = EndScreen(None, 60, "Game Over")
-    you_win = EndScreen(None, 60, "You Win!")
+    boss_time = EndScreen(None, 60, "Boss Time")
+    boss = False
 
-    while health.health > 0 and score.score < 100:
+    while health.health > 0:
         click = False
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -370,53 +379,55 @@ def main():
         climb_direction = keystate[pg.K_DOWN] - keystate[pg.K_UP]
         space_pressed = keystate[pg.K_SPACE]
 
-        # move the camera
+        # move the camera or player
         if not modal.active and not no_money_modal.active:
-            if camera.move(direction):
-                # reset the buy modal so it pops up again
-                modal.buy_object = None
+            if boss:
+                player.move(direction, camera.speed)
+            else:
+                if camera.move(direction):
+                    # reset the buy modal so it pops up again
+                    modal.buy_object = None
 
         # display each static game object, including the background
         for g in game_objects:
             g.draw(camera, screen)
 
         # display each stateful game object
-        for f in camera.visible_frames():
-            # populate infinite coins
-            if f not in coins:
-                coins[f] = []
-                for i in range(5):
-                    coins[f].append(GameObject(pg.Rect(500 + (i * 50), 255, 40, 40), "netut_coin.gif"))
-
-            # populate infinite ring boxes
-            if f not in ring_boxes:
-                ring_boxes[f] = [ring_box]
-
-            # display coins
-            for c in coins[f]:
-                if player.is_on_coin(c, f):
-                    if pg.mixer:
-                        coin_sound.play()
-                    coins[f].remove(c)
-                    score.update(1)
-                else:
-                    c.draw(camera, screen, f)
-            # display buy objects
-            if f in buy_objects:
-                for o in buy_objects[f]:
-                    if o.active:
+        if not boss:
+            for f in camera.visible_frames():
+                # populate infinite coins
+                if f not in coins:
+                    coins[f] = []
+                    for i in range(5):
+                        coins[f].append(GameObject(pg.Rect(500 + (i * 50), 255, 40, 40), "netut_coin.gif"))
+                # populate infinite ring boxes
+                if f not in ring_boxes:
+                    ring_boxes[f] = [ring_box]
+                # display coins
+                for c in coins[f]:
+                    if player.is_on_coin(c, f):
+                        if pg.mixer:
+                            coin_sound.play()
+                        coins[f].remove(c)
+                        score.update(1)
+                    else:
+                        c.draw(camera, screen, f)
+                # display buy objects
+                if f in buy_objects:
+                    for o in buy_objects[f]:
+                        if o.active:
+                            o.draw(camera, screen, f)
+                            if not modal.active and modal.buy_object != o and player.is_on_object(o.pos, f):
+                                modal.set_active(o)
+                # display ring boxes
+                for o in ring_boxes[f]:
+                    if player.is_on_object(o.pos, f) and player.arm_up and player.bought_item_left:
+                        if pg.mixer:
+                            coin_sound.play()
+                        ring_boxes[f].remove(o)
+                        score.update(10)
+                    else:
                         o.draw(camera, screen, f)
-                        if not modal.active and modal.buy_object != o and player.is_on_object(o.pos, f):
-                            modal.set_active(o)
-            # display ring boxes
-            for o in ring_boxes[f]:
-                if player.is_on_object(o.pos, f) and player.arm_up and player.bought_item_left:
-                    if pg.mixer:
-                        coin_sound.play()
-                    ring_boxes[f].remove(o)
-                    score.update(10)
-                else:
-                    o.draw(camera, screen, f)
 
         # display buy modal
         if modal.active and modal.buy_object:
@@ -442,15 +453,23 @@ def main():
                     no_money_modal.dismiss()
 
         # make the player climb or fall
-        on_ladder = player.is_on_ladder(ladder)
-        if on_ladder:
-            player.climb(climb_direction)
+        if boss:
+            on_ladder = player.is_on_ladder(boss_ladder_left) or player.is_on_ladder(boss_ladder_right)
+            if on_ladder:
+                player.climb(climb_direction)
+            else:
+                player.fall(None)
         else:
-            player.fall(platform)
+            on_ladder = player.is_on_ladder(ladder)
+            if on_ladder:
+                player.climb(climb_direction)
+            else:
+                player.fall(platform)
 
         # make the player die
         if player.should_die():
             health.lose_health()
+            player.reset_fall()
             if pg.mixer:
                 grunt_sound.play()
 
@@ -464,14 +483,26 @@ def main():
         score.draw(screen)
         health.draw(screen)
 
+        if not boss and score.score >= 10:
+            screen.fill(pg.Color("Black"))
+            boss_time.draw(screen)
+            boss = True
+            game_objects = [background, boss_ladder_left, boss_ladder_right]
+            coins = {}
+            ring_boxes = {}
+            buy_objects = {}
+            player.reset_pos()
+            camera.reset()
+            pg.display.update()
+            pg.event.wait()
+            pg.time.wait(3000)
+
         pg.display.update()
         clock.tick(40)
 
     screen.fill(pg.Color("Black"))
     if health.health == 0:
         game_over.draw(screen)
-    elif score.score == 100:
-        you_win.draw(screen)
     pg.display.update()
 
     if pg.mixer:
