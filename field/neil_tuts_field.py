@@ -137,36 +137,61 @@ class Player:
         return self.total_fall >= 200
 
 class Boss:
-    def __init__(self, pos, left_name, right_name, speed, health):
+    def __init__(self, pos, left_name, right_name, left_hit_name, right_hit_name, speed, health):
         self.pos = pos
         self.left_image = load_image(left_name, pos.width, pos.height)
         self.right_image = load_image(right_name, pos.width, pos.height)
+        self.left_image_hit = load_image(left_hit_name, pos.width, pos.height)
+        self.right_image_hit = load_image(right_hit_name, pos.width, pos.height)
         self.speed = speed
         self.health = health
         self.direction = 1
         self.active = False
+        self.is_hit = False
+        self.flash_count = 0
+        self.falling = False
+        self.won = False
 
     def draw(self, screen):
-        img = self.right_image if self.direction == 1 else self.left_image
+        if self.is_hit:
+            img = self.right_image_hit if self.direction == 1 else self.left_image_hit
+            self.flash_count += 1
+            if self.flash_count > 5:
+                self.flash_count = 0
+                self.is_hit = False
+        else:
+            img = self.right_image if self.direction == 1 else self.left_image
+
         screen.blit(img, self.pos)
 
     def move(self):
-        self.pos = self.pos.move(self.speed * self.direction, 0)
+        if self.falling:
+            if self.pos.bottom < Player.ground:
+                self.pos = self.pos.move(5 * self.direction, 7)
+        else:
+            self.pos = self.pos.move(self.speed * self.direction, 0)
         if self.pos.right > 800 or self.pos.left < 0:
             self.change_direction()
+        if self.pos.bottom > Player.ground:
+            self.pos.bottom = Player.ground
 
     def activate(self):
         self.active = True
 
     def hit(self):
         self.health -= 1
-        return 1 if self.health == 0 else 0
+        self.is_hit = True
+        if self.falling:
+            self.won = True
 
-    def hit_player(self, player):
-        return self.pos.inflate(-60, 0).colliderect(player.pos)
+    def is_on_player(self, player, offset):
+        return self.pos.inflate(offset, 0).colliderect(player.pos)
 
     def change_direction(self):
         self.direction *= -1
+
+    def set_falling(self):
+        self.falling = True
 
 class GameObject:
     def __init__(self, pos, name):
@@ -403,9 +428,10 @@ def main():
     no_money_modal = OkModal(pg.Rect(150, 100, 500, 150), None, 40, "You don't have enough coins.")
     game_over = EndScreen(None, 60, "Game Over")
     boss_time = EndScreen(None, 60, "Boss Time")
-    boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", 3, 5)
+    you_win = EndScreen(None, 60, "You Win!!")
+    boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", "eggman_boss_left_hit.gif", "eggman_boss_right_hit.gif", 3, 2)
 
-    while health.health > 0:
+    while health.health > 0 and not boss.won:
         click = False
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -522,12 +548,19 @@ def main():
             if pg.mixer:
                 grunt_sound.play()
 
-        # make the boss hit the player
-        if boss.active and boss.hit_player(player):
-            health.lose_health()
-            boss.change_direction()
-            if pg.mixer:
-                grunt_sound.play()
+        # make the boss get hit or hit the player
+        if boss.active:
+            if player.arm_up and player.bought_item_left and boss.is_on_player(player, 0):
+                boss.hit()
+                if not boss.falling:
+                    boss.change_direction()
+                if boss.health == 0:
+                    boss.set_falling()
+            elif boss.is_on_player(player, -60) and not boss.falling:
+                health.lose_health()
+                boss.change_direction()
+                if pg.mixer:
+                    grunt_sound.play()
 
         # make the player punch
         player.set_arm_up(space_pressed)
@@ -570,6 +603,8 @@ def main():
     screen.fill(pg.Color("Black"))
     if health.health == 0:
         game_over.draw(screen)
+    elif boss.won:
+        you_win.draw(screen)
     pg.display.update()
 
     if pg.mixer:
