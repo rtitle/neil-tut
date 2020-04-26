@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-""" pygame.examples.neil_tuts_field
-
+"""
+Energy Punch
 This game has stuff you can buy and characters.
 """
 import os
@@ -40,7 +40,7 @@ class Player:
         self.bought_item_right_pos = None
         self.arm_up = False
 
-    def draw(self, direction, on_ladder, modal_active, screen):
+    def draw(self, direction, on_ladder, on_top_of_ladder, modal_active, screen):
         if not modal_active:
             if direction < 0:
                 img = self.image_walking_left_arm_up if self.arm_up else self.image_walking_left
@@ -52,7 +52,7 @@ class Player:
                 screen.blit(img, self.pos)
                 if self.bought_item_right:
                     screen.blit(self.bought_item_right.image, self.bought_item_right_pos)
-            elif on_ladder:
+            elif on_ladder and not on_top_of_ladder:
                 screen.blit(self.image_climbing, self.pos)
             else:
                 img = self.image_standing_arm_up if self.arm_up else self.image_standing
@@ -118,9 +118,13 @@ class Player:
             arr = list(filter(lambda x: x[0] == frame, arr))
         return any(self.pos.colliderect(a[1]) for a in arr)
 
-    def should_climb(self, ladder):
+    def is_on_ladder(self, ladder): 
         arr = self.camera.adjust(ladder.pos)
-        return any(self.pos.right > p[1].left+25 and self.pos.left < p[1].right-25 and self.pos.bottom > p[1].top and self.pos.top < p[1].bottom for p in arr)
+        return any(self.pos.right > p[1].left+25 and self.pos.left < p[1].right-25 and self.pos.bottom > p[1].top+20 and self.pos.top < p[1].bottom for p in arr)
+
+    def is_on_top_of_ladder(self, ladder):
+        arr = self.camera.adjust(ladder.pos)
+        return any(self.pos.right > p[1].left+25 and self.pos.left < p[1].right-25 and self.pos.bottom < p[1].top+30 for p in arr)
 
     def is_above_platform(self, platform):
         arr = self.camera.adjust(platform.pos)
@@ -148,10 +152,8 @@ class Boss:
 
     def move(self):
         self.pos = self.pos.move(self.speed * self.direction, 0)
-        if self.pos.right > 800:
-            self.direction = -1
-        elif self.pos.left < 0:
-            self.direction = 1
+        if self.pos.right > 800 or self.pos.left < 0:
+            self.change_direction()
 
     def activate(self):
         self.active = True
@@ -159,6 +161,12 @@ class Boss:
     def hit(self):
         self.health -= 1
         return 1 if self.health == 0 else 0
+
+    def hit_player(self, player):
+        return self.pos.inflate(-60, 0).colliderect(player.pos)
+
+    def change_direction(self):
+        self.direction *= -1
 
 class GameObject:
     def __init__(self, pos, name):
@@ -491,15 +499,19 @@ def main():
 
         # make the player climb or fall
         if boss.active:
-            should_climb = player.should_climb(boss_ladder_left) or player.should_climb(boss_ladder_right)
-            if should_climb:
-                player.climb(climb_direction)
+            on_ladder = player.is_on_ladder(boss_ladder_left) or player.is_on_ladder(boss_ladder_right)
+            on_top_of_ladder = player.is_on_top_of_ladder(boss_ladder_left) or player.is_on_top_of_ladder(boss_ladder_right)
+            if on_ladder:
+                if climb_direction == 1 or not on_top_of_ladder:
+                    player.climb(climb_direction)
             else:
                 player.fall(None)
         else:
-            should_climb = player.should_climb(ladder)
-            if should_climb:
-                player.climb(climb_direction)
+            on_ladder = player.is_on_ladder(ladder)
+            on_top_of_ladder = player.is_on_top_of_ladder(ladder)
+            if on_ladder:
+                if climb_direction == 1 or not on_top_of_ladder:
+                    player.climb(climb_direction)
             else:
                 player.fall(platform)
 
@@ -510,11 +522,18 @@ def main():
             if pg.mixer:
                 grunt_sound.play()
 
+        # make the boss hit the player
+        if boss.active and boss.hit_player(player):
+            health.lose_health()
+            boss.change_direction()
+            if pg.mixer:
+                grunt_sound.play()
+
         # make the player punch
         player.set_arm_up(space_pressed)
 
         # draw the player
-        player.draw(direction, should_climb, modal.active or no_money_modal.active, screen)
+        player.draw(direction, on_ladder, on_top_of_ladder, modal.active or no_money_modal.active, screen)
 
         # draw the boss
         if boss.active:
