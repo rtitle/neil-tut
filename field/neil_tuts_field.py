@@ -112,6 +112,12 @@ class Player:
     def reset_fall(self):
         self.total_fall = 0
 
+    def reset_buy_item(self):
+        self.bought_item_left = None
+        self.bought_item_right = None
+        self.bought_item_left_pos = None
+        self.bought_item_right_pos = None
+
     def is_on_object(self, pos, frame=None):
         arr = self.camera.adjust(pos)
         if frame:
@@ -181,17 +187,26 @@ class Boss:
     def hit(self):
         self.health -= 1
         self.is_hit = True
-        if self.falling:
-            self.won = True
+
+    def set_won(self):
+        self.won = True
 
     def is_on_player(self, player, offset):
         return self.pos.inflate(offset, 0).colliderect(player.pos)
+
+    def is_on_ground(self):
+        return self.pos.bottom == Player.ground
 
     def change_direction(self):
         self.direction *= -1
 
     def set_falling(self):
         self.falling = True
+
+    def reset(self):
+        self.won = False
+        self.active = False
+        self.falling = False
 
 class GameObject:
     def __init__(self, pos, name):
@@ -261,6 +276,11 @@ class Score:
         msg = "Coins: %d" % self.score
         self.image = self.font.render(msg, 0, pg.Color("Yellow"))
 
+    def reset(self):
+        self.score = 0
+        msg = "Coins: %d" % self.score
+        self.image = self.font.render(msg, 0, pg.Color("Yellow"))
+
     def draw(self, screen):
         screen.blit(self.image, self.pos)
 
@@ -277,11 +297,15 @@ class EndScreen:
 class Health:
     def __init__(self, health, name):
         self.health = health
+        self.orig_health = health
         self.image = load_image(name, 50, 50)
         self.pos = self.image.get_rect().move(10, 10)
 
     def lose_health(self):
         self.health -= 1
+
+    def reset(self):
+        self.health = self.orig_health
 
     def draw(self, screen):
         for i in range(self.health):
@@ -321,7 +345,8 @@ class YesNoModal:
     def __init__(self, pos, font_name, font_size):
         self.pos = pos
         self.active = False
-        self.buy_object = None
+        self.buy_object_left = None
+        self.buy_object_right = None
         
         self.font = pg.font.Font(font_name, font_size)
         self.font.set_bold(1)
@@ -332,9 +357,10 @@ class YesNoModal:
         self.no_image = self.font.render("No", 0, pg.Color("Yellow"))
         self.no_pos = self.no_image.get_rect().move(pos.right - 90, pos.bottom - 50)
 
-    def set_active(self, buy_object):
+    def set_active(self, buy_object_left, buy_object_right):
         self.active = True
-        self.buy_object = buy_object
+        self.buy_object_left = buy_object_left
+        self.buy_object_right = buy_object_right
 
     def dismiss(self):
         self.active = False
@@ -403,6 +429,8 @@ def main():
     clock = pg.time.Clock()
 
     background = GameObject(pg.Rect(0, 0, 800, 600), "green_hills_1.png")
+    background_level_2 = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_level_2.png")
+    ground_level_2 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_2.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
     boss_ladder_left = GameObject(pg.Rect(10, 280, 100, 250), "ladder3.gif")
     boss_ladder_right = GameObject(pg.Rect(690, 280, 100, 250), "ladder3.gif")
@@ -410,10 +438,12 @@ def main():
     ring_box = GameObject(pg.Rect(900, 450, 75, 75), "coin_box.gif")
     hammer_left = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_left.gif", "hammer", 10)
     hammer_right = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_right.gif", "hammer", 10)
+    axe_left = BuyObject(pg.Rect(700, 460, 50, 50), "axe_left.png", "axe", 20)
+    axe_right = BuyObject(pg.Rect(700, 460, 50, 50), "axe_right.png", "axe", 20)
 
     game_objects = [background, ladder, platform]
     coins = {}
-    buy_objects = {1: [hammer_right]}
+    buy_objects = {1: [(hammer_left, hammer_right)]}
     ring_boxes = {}
 
     camera = Camera(background, 10)
@@ -428,10 +458,11 @@ def main():
     no_money_modal = OkModal(pg.Rect(150, 100, 500, 150), None, 40, "You don't have enough coins.")
     game_over = EndScreen(None, 60, "Game Over")
     boss_time = EndScreen(None, 60, "Boss Time")
+    level_two = EndScreen(None, 60, "Level 2")
     you_win = EndScreen(None, 60, "You Win!!")
     boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", "eggman_boss_left_hit.gif", "eggman_boss_right_hit.gif", 3, 2)
 
-    while health.health > 0 and not boss.won:
+    while health.health > 0:
         click = False
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -453,7 +484,8 @@ def main():
             else:
                 if camera.move(direction):
                     # reset the buy modal so it pops up again
-                    modal.buy_object = None
+                    modal.buy_object_left = None
+                    modal.buy_object_right = None
 
         # move the boss
         if boss.active:
@@ -486,10 +518,10 @@ def main():
                 # display buy objects
                 if f in buy_objects:
                     for o in buy_objects[f]:
-                        if o.active:
-                            o.draw(camera, screen, f)
-                            if not modal.active and modal.buy_object != o and player.is_on_object(o.pos, f):
-                                modal.set_active(o)
+                        if o[0].active:
+                            o[0].draw(camera, screen, f)
+                            if not modal.active and modal.buy_object_left != o[0] and player.is_on_object(o[0].pos, f):
+                                modal.set_active(o[0], o[1])
                 # display ring boxes
                 for o in ring_boxes[f]:
                     if player.is_on_object(o.pos, f) and player.arm_up and player.bought_item_left:
@@ -501,16 +533,16 @@ def main():
                         o.draw(camera, screen, f)
 
         # display buy modal
-        if modal.active and modal.buy_object:
-            modal.set_message(f"Buy {modal.buy_object.item_name} for {modal.buy_object.price} coins?")
+        if modal.active and modal.buy_object_left:
+            modal.set_message(f"Buy {modal.buy_object_left.item_name} for {modal.buy_object_left.price} coins?")
             modal.draw(screen)
             if click:
                 if modal.is_in_yes(mouse_pos[0], mouse_pos[1]):
                     modal.dismiss()
-                    if modal.buy_object.price <= score.score:
-                        modal.buy_object.deactivate()
-                        player.buy_item(hammer_left, modal.buy_object)  # TODO
-                        score.update(-modal.buy_object.price)
+                    if modal.buy_object_left.price <= score.score:
+                        modal.buy_object_left.deactivate()
+                        player.buy_item(modal.buy_object_left, modal.buy_object_right)
+                        score.update(-modal.buy_object_left.price)
                     else:
                         no_money_modal.set_active()
                 if modal.is_in_no(mouse_pos[0], mouse_pos[1]):
@@ -551,11 +583,13 @@ def main():
         # make the boss get hit or hit the player
         if boss.active:
             if player.arm_up and player.bought_item_left and boss.is_on_player(player, 0):
-                boss.hit()
-                if not boss.falling:
+                if boss.is_on_ground():
+                    boss.set_won()
+                elif not boss.falling:
+                    boss.hit()
                     boss.change_direction()
-                if boss.health == 0:
-                    boss.set_falling()
+                    if boss.health == 0:
+                        boss.set_falling()
             elif boss.is_on_player(player, -60) and not boss.falling:
                 health.lose_health()
                 boss.change_direction()
@@ -597,14 +631,40 @@ def main():
                 pg.mixer.music.load(music)
                 pg.mixer.music.play(-1)
 
+        # Change to level 2
+        # TODO for level 2:
+        # - (done) make a ground
+        # - (done) lose the hammer, put in different objects
+        # - different boss
+        # - (done) different music
+        if boss.won:
+            screen.fill(pg.Color("Black"))
+            level_two.draw(screen)
+            game_objects = [background_level_2, ground_level_2, platform, ladder]
+            coins = {}
+            ring_boxes = {}
+            buy_objects = {2: [(axe_left, axe_right)]}
+            player.reset_pos()
+            player.reset_buy_item()
+            camera.reset()
+            score.reset()
+            health.reset()
+            boss.reset()
+            pg.display.update()
+            if pg.mixer:
+                pg.mixer.music.fadeout(1000)
+            pg.event.wait()
+            pg.time.wait(3000)
+            if pg.mixer:
+                music = os.path.join(main_dir, "data", "Solve The Puzzle.ogg")
+                pg.mixer.music.load(music)
+                pg.mixer.music.play(-1)
+
         pg.display.update()
         clock.tick(40)
 
     screen.fill(pg.Color("Black"))
-    if health.health == 0:
-        game_over.draw(screen)
-    elif boss.won:
-        you_win.draw(screen)
+    game_over.draw(screen)
     pg.display.update()
 
     if pg.mixer:
