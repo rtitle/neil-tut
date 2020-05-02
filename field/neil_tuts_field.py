@@ -223,10 +223,12 @@ class GameObject:
                 screen.blit(self.image, o[1])
 
 class BuyObject(GameObject):
-    def __init__(self, pos, name, item_name, price):
+    def __init__(self, pos, name, item_name, price, is_character=False):
         super().__init__(pos, name)
+        self.name = name
         self.price = price
         self.item_name = item_name
+        self.is_character = is_character
 
 class Camera:
     def __init__(self, background, speed):
@@ -310,6 +312,52 @@ class Health:
     def draw(self, screen):
         for i in range(self.health):
             screen.blit(self.image, self.pos.move(i*50, 0))
+
+class Pause:
+    def __init__(self, pause_button, pause_screen, question, pause_characters):
+        self.button_image = load_image(pause_button, 60, 60)
+        self.screen_image = load_image(pause_screen, 800, 600)
+        self.button_pos = self.button_image.get_rect().move(10, 530)
+        self.screen_pos = self.screen_image.get_rect()
+        self.question_image = load_image(question, 70, 70)
+        self.font = pg.font.Font(None, 32)
+        self.is_paused = False
+        self.pause_characters = pause_characters
+        self.process_pause_characters()
+
+    def add_pause_character(self, character, name):
+        self.pause_characters.append((character, name))
+        self.process_pause_characters()
+
+    def process_pause_characters(self):
+        self.processed_pause_characters = []
+        for i in range(5):
+            border_pos = pg.Rect(150, 80 + i*90, 480, 70)
+            img = load_image(self.pause_characters[i][0], 60, 60) if len(self.pause_characters) > i else self.question_image
+            pos = img.get_rect().move(160, 80 + i*90)
+            font = self.font.render(self.pause_characters[i][1], 0, pg.Color("Orange")) if len(self.pause_characters) > i else self.font.render("???", 0, pg.Color("Orange"))
+            font_pos = font.get_rect().move(350, 90 + i*90)
+            self.processed_pause_characters.append((border_pos, img, pos, font, font_pos))
+
+    def set_paused(self, is_paused):
+        self.is_paused = is_paused
+
+    def is_in_button(self, x, y):
+        return self.button_pos.collidepoint(x, y)
+
+    def is_in_resume_button(self, x, y):
+        return pg.Rect(585, 431, 100, 100).collidepoint(x, y)
+
+    def draw(self, screen):
+        if self.is_paused:
+            screen.blit(self.screen_image, self.screen_pos)
+            for c in self.processed_pause_characters:
+                print(c)
+                pg.draw.rect(screen, pg.Color("White"), c[0])
+                screen.blit(c[1], c[2])
+                screen.blit(c[3], c[4])
+        else:
+            screen.blit(self.button_image, self.button_pos)
 
 # TODO: modal class hierarchy
 
@@ -440,6 +488,7 @@ def main():
     hammer_right = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_right.gif", "hammer", 10)
     axe_left = BuyObject(pg.Rect(700, 460, 50, 50), "axe_left.png", "axe", 20)
     axe_right = BuyObject(pg.Rect(700, 460, 50, 50), "axe_right.png", "axe", 20)
+    sonic = BuyObject(pg.Rect(700, 430, 100, 130), "sonic.png", "Sonic", 40, True)
 
     game_objects = [background, ladder, platform]
     coins = {}
@@ -453,13 +502,13 @@ def main():
         "netut_climbing.gif", 5, 20, camera)
     score = Score(None, 40)
     health = Health(3, "netut_heart.gif")
+    pause = Pause("pause.png", "pause_screen.png", "question_mark.png", [("netut_standing_arm_up.gif", "Neil Tut")])
     modal = YesNoModal(pg.Rect(150, 100, 450, 200), None, 40)
 
     no_money_modal = OkModal(pg.Rect(150, 100, 500, 150), None, 40, "You don't have enough coins.")
     game_over = EndScreen(None, 60, "Game Over")
     boss_time = EndScreen(None, 60, "Boss Time")
     level_two = EndScreen(None, 60, "Level 2")
-    you_win = EndScreen(None, 60, "You Win!!")
     boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", "eggman_boss_left_hit.gif", "eggman_boss_right_hit.gif", 3, 2)
 
     while health.health > 0:
@@ -478,7 +527,7 @@ def main():
         space_pressed = keystate[pg.K_SPACE]
 
         # move the camera or player
-        if not modal.active and not no_money_modal.active:
+        if not modal.active and not no_money_modal.active and not pause.is_paused:
             if boss.active:
                 player.move(direction, camera.speed)
             else:
@@ -488,15 +537,16 @@ def main():
                     modal.buy_object_right = None
 
         # move the boss
-        if boss.active:
+        if boss.active and not pause.is_paused:
             boss.move()
 
         # display each static game object, including the background
-        for g in game_objects:
-            g.draw(camera, screen)
+        if not pause.is_paused:
+            for g in game_objects:
+                g.draw(camera, screen)
 
         # display each stateful game object
-        if not boss.active:
+        if not boss.active and not pause.is_paused:
             for f in camera.visible_frames():
                 # populate infinite coins
                 if f not in coins:
@@ -541,7 +591,10 @@ def main():
                     modal.dismiss()
                     if modal.buy_object_left.price <= score.score:
                         modal.buy_object_left.deactivate()
-                        player.buy_item(modal.buy_object_left, modal.buy_object_right)
+                        if modal.buy_object_left.is_character:
+                            pause.add_pause_character(modal.buy_object_left.name, modal.buy_object_left.item_name)
+                        else:
+                            player.buy_item(modal.buy_object_left, modal.buy_object_right)
                         score.update(-modal.buy_object_left.price)
                     else:
                         no_money_modal.set_active()
@@ -556,7 +609,7 @@ def main():
                     no_money_modal.dismiss()
 
         # make the player climb or fall
-        if boss.active:
+        if boss.active and not pause.is_paused:
             on_ladder = player.is_on_ladder(boss_ladder_left) or player.is_on_ladder(boss_ladder_right)
             on_top_of_ladder = player.is_on_top_of_ladder(boss_ladder_left) or player.is_on_top_of_ladder(boss_ladder_right)
             if on_ladder:
@@ -581,7 +634,7 @@ def main():
                 grunt_sound.play()
 
         # make the boss get hit or hit the player
-        if boss.active:
+        if boss.active and not pause.is_paused:
             if player.arm_up and player.bought_item_left and boss.is_on_player(player, 0):
                 if boss.is_on_ground():
                     boss.set_won()
@@ -606,9 +659,16 @@ def main():
         if boss.active:
             boss.draw(screen)
 
-        # draw the score and health
+        if click:
+            if not pause.is_paused and pause.is_in_button(mouse_pos[0], mouse_pos[1]):
+                pause.set_paused(True)
+            elif pause.is_paused and pause.is_in_resume_button(mouse_pos[0], mouse_pos[1]):
+                pause.set_paused(False)
+
+        # draw the score and health and pause button
         score.draw(screen)
         health.draw(screen)
+        pause.draw(screen)
 
         # Change to boss mode
         if not boss.active and score.score >= 100:
@@ -643,7 +703,7 @@ def main():
             game_objects = [background_level_2, ground_level_2, platform, ladder]
             coins = {}
             ring_boxes = {}
-            buy_objects = {2: [(axe_left, axe_right)]}
+            buy_objects = {2: [(axe_left, axe_right)], 4: [(sonic, sonic)]}
             player.reset_pos()
             player.reset_buy_item()
             camera.reset()
