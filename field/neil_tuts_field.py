@@ -22,13 +22,7 @@ class Player:
         standing_arm_up, walking_left_arm_up, walking_right_arm_up,
         climbing, climb_speed, fall_speed, camera
     ):
-        self.image_standing = load_image(standing, 100, 150)
-        self.image_walking_left = load_image(walking_left, 100, 150)
-        self.image_walking_right = load_image(walking_right, 100, 150)
-        self.image_standing_arm_up = load_image(standing_arm_up, 100, 150)
-        self.image_walking_left_arm_up = load_image(walking_left_arm_up, 100, 150)
-        self.image_walking_right_arm_up = load_image(walking_right_arm_up, 100, 150)
-        self.image_climbing = load_image(climbing, 120, 150)
+        self.set_player_image(standing, walking_left, walking_right, standing_arm_up, walking_left_arm_up, walking_right_arm_up, climbing)
         self.climb_speed = climb_speed
         self.fall_speed = fall_speed
         self.camera = camera
@@ -39,6 +33,15 @@ class Player:
         self.bought_item_left_pos = None
         self.bought_item_right_pos = None
         self.arm_up = False
+
+    def set_player_image(self, standing, walking_left, walking_right, standing_arm_up, walking_left_arm_up, walking_right_arm_up, climbing):
+        self.image_standing = load_image(standing, 100, 150)
+        self.image_walking_left = load_image(walking_left, 100, 150)
+        self.image_walking_right = load_image(walking_right, 100, 150)
+        self.image_standing_arm_up = load_image(standing_arm_up, 100, 150)
+        self.image_walking_left_arm_up = load_image(walking_left_arm_up, 100, 150)
+        self.image_walking_right_arm_up = load_image(walking_right_arm_up, 100, 150)
+        self.image_climbing = load_image(climbing, 120, 150)
 
     def draw(self, direction, on_ladder, on_top_of_ladder, modal_active, screen):
         if not modal_active:
@@ -145,12 +148,14 @@ class Player:
 class Boss:
     def __init__(self, pos, left_name, right_name, left_hit_name, right_hit_name, speed, health):
         self.pos = pos
+        self.original_pos = pos
         self.left_image = load_image(left_name, pos.width, pos.height)
         self.right_image = load_image(right_name, pos.width, pos.height)
         self.left_image_hit = load_image(left_hit_name, pos.width, pos.height)
         self.right_image_hit = load_image(right_hit_name, pos.width, pos.height)
         self.speed = speed
         self.health = health
+        self.original_health = health
         self.direction = 1
         self.active = False
         self.is_hit = False
@@ -207,6 +212,9 @@ class Boss:
         self.won = False
         self.active = False
         self.falling = False
+        self.pos = self.original_pos
+        self.health = self.original_health
+        self.direction = 1
 
 class GameObject:
     def __init__(self, pos, name):
@@ -348,11 +356,19 @@ class Pause:
     def is_in_resume_button(self, x, y):
         return pg.Rect(585, 431, 100, 100).collidepoint(x, y)
 
+    def is_in_neil_tut(self, x, y):
+        return len(self.pause_characters) > 0 and self.processed_pause_characters[0][2].collidepoint(x, y)
+
+    def is_in_sonic(self, x, y):
+        return len(self.pause_characters) > 1 and self.processed_pause_characters[1][2].collidepoint(x, y)
+
+    def is_in_tails(self, x, y):
+        return len(self.pause_characters) > 2 and self.processed_pause_characters[2][2].collidepoint(x, y)
+
     def draw(self, screen):
         if self.is_paused:
             screen.blit(self.screen_image, self.screen_pos)
             for c in self.processed_pause_characters:
-                print(c)
                 pg.draw.rect(screen, pg.Color("White"), c[0])
                 screen.blit(c[1], c[2])
                 screen.blit(c[3], c[4])
@@ -478,7 +494,9 @@ def main():
 
     background = GameObject(pg.Rect(0, 0, 800, 600), "green_hills_1.png")
     background_level_2 = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_level_2.png")
+    background_level_3 = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_level_3.png")
     ground_level_2 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_2.png")
+    ground_level_3 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_3.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
     boss_ladder_left = GameObject(pg.Rect(10, 280, 100, 250), "ladder3.gif")
     boss_ladder_right = GameObject(pg.Rect(690, 280, 100, 250), "ladder3.gif")
@@ -488,7 +506,10 @@ def main():
     hammer_right = BuyObject(pg.Rect(700, 460, 50, 50), "hammer_right.gif", "hammer", 10)
     axe_left = BuyObject(pg.Rect(700, 460, 50, 50), "axe_left.png", "axe", 20)
     axe_right = BuyObject(pg.Rect(700, 460, 50, 50), "axe_right.png", "axe", 20)
-    sonic = BuyObject(pg.Rect(700, 430, 100, 130), "sonic.png", "Sonic", 40, True)
+    sword_left = BuyObject(pg.Rect(700, 460, 50, 50), "sword_left.jpg", "sword", 35)
+    sword_right = BuyObject(pg.Rect(700, 460, 50, 50), "sword_right.jpg", "sword", 35)
+    sonic = BuyObject(pg.Rect(700, 430, 100, 130), "sonic_left.png", "Sonic", 40, True)
+    tails = BuyObject(pg.Rect(700, 430, 100, 130), "tails_left.png", "Tails", 55, True)
 
     game_objects = [background, ladder, platform]
     coins = {}
@@ -509,9 +530,12 @@ def main():
     game_over = EndScreen(None, 60, "Game Over")
     boss_time = EndScreen(None, 60, "Boss Time")
     level_two = EndScreen(None, 60, "Level 2")
+    level_three = EndScreen(None, 60, "Level 3")
     boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", "eggman_boss_left_hit.gif", "eggman_boss_right_hit.gif", 3, 2)
 
-    while health.health > 0:
+    cur_level = 1
+
+    while health.health > 0 and cur_level <= 3:
         click = False
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -662,8 +686,18 @@ def main():
         if click:
             if not pause.is_paused and pause.is_in_button(mouse_pos[0], mouse_pos[1]):
                 pause.set_paused(True)
-            elif pause.is_paused and pause.is_in_resume_button(mouse_pos[0], mouse_pos[1]):
-                pause.set_paused(False)
+            elif pause.is_paused:
+                if pause.is_in_resume_button(mouse_pos[0], mouse_pos[1]):
+                    pause.set_paused(False)
+                elif pause.is_in_sonic(mouse_pos[0], mouse_pos[1]):
+                    player.set_player_image("sonic_right.png", "sonic_left.png", "sonic_right.png", "sonic_right.png", "sonic_left.png", "sonic_right.png", "sonic_right.png")
+                    pause.set_paused(False)
+                elif pause.is_in_neil_tut(mouse_pos[0], mouse_pos[1]):
+                    player.set_player_image("netut_standing.gif", "netut_walking_left.gif", "netut_walking_right.gif", "netut_standing_arm_up.gif", "netut_walking_left_arm_up.gif", "netut_walking_right_arm_up.gif", "netut_climbing.gif")
+                    pause.set_paused(False)
+                elif pause.is_in_tails(mouse_pos[0], mouse_pos[1]):
+                    player.set_player_image("tails_right.png", "tails_left.png", "tails_right.png", "tails_right.png", "tails_left.png", "tails_right.png", "tails_right.png")
+                    pause.set_paused(False)
 
         # draw the score and health and pause button
         score.draw(screen)
@@ -675,7 +709,12 @@ def main():
             screen.fill(pg.Color("Black"))
             boss_time.draw(screen)
             boss.activate()
-            game_objects = [background, boss_ladder_left, boss_ladder_right]
+            if cur_level == 1:
+                game_objects = [background, boss_ladder_left, boss_ladder_right]
+            elif cur_level == 2:
+                game_objects = [background_level_2, ground_level_2, boss_ladder_left, boss_ladder_right]
+            elif cur_level == 3:
+                game_objects = [background_level_3, ground_level_3, boss_ladder_left, boss_ladder_right]
             coins = {}
             ring_boxes = {}
             buy_objects = {}
@@ -691,19 +730,12 @@ def main():
                 pg.mixer.music.load(music)
                 pg.mixer.music.play(-1)
 
-        # Change to level 2
-        # TODO for level 2:
-        # - (done) make a ground
-        # - (done) lose the hammer, put in different objects
-        # - different boss
-        # - (done) different music
+        # Change to next level
         if boss.won:
+            cur_level += 1
             screen.fill(pg.Color("Black"))
-            level_two.draw(screen)
-            game_objects = [background_level_2, ground_level_2, platform, ladder]
             coins = {}
             ring_boxes = {}
-            buy_objects = {2: [(axe_left, axe_right)], 4: [(sonic, sonic)]}
             player.reset_pos()
             player.reset_buy_item()
             camera.reset()
@@ -715,10 +747,21 @@ def main():
                 pg.mixer.music.fadeout(1000)
             pg.event.wait()
             pg.time.wait(3000)
-            if pg.mixer:
-                music = os.path.join(main_dir, "data", "Solve The Puzzle.ogg")
-                pg.mixer.music.load(music)
-                pg.mixer.music.play(-1)
+            if cur_level == 2:
+                level_two.draw(screen)
+                game_objects = [background_level_2, ground_level_2, platform, ladder]
+                buy_objects = {2: [(axe_left, axe_right)], 4: [(sonic, sonic)]}
+                if pg.mixer:
+                    music = os.path.join(main_dir, "data", "Solve The Puzzle.ogg")
+                    pg.mixer.music.load(music)
+                    pg.mixer.music.play(-1)
+            elif cur_level == 3:
+                level_three.draw(screen)
+                game_objects = [background_level_3, ground_level_3, platform, ladder]
+                if pg.mixer:
+                    music = os.path.join(main_dir, "data", "No Place For Straw Cowboys.ogg")
+                    pg.mixer.music.load(music)
+                    pg.mixer.music.play(-1)
 
         pg.display.update()
         clock.tick(40)
