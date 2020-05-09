@@ -365,6 +365,9 @@ class Pause:
     def is_in_tails(self, x, y):
         return len(self.pause_characters) > 2 and self.processed_pause_characters[2][2].collidepoint(x, y)
 
+    def is_in_knuckles(self, x, y):
+        return len(self.pause_characters) > 3 and self.processed_pause_characters[3][2].collidepoint(x, y)
+
     def draw(self, screen):
         if self.is_paused:
             screen.blit(self.screen_image, self.screen_pos)
@@ -495,6 +498,7 @@ def main():
     background = GameObject(pg.Rect(0, 0, 800, 600), "green_hills_1.png")
     background_level_2 = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_level_2.png")
     background_level_3 = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_level_3.png")
+    background_level_4 = GameObject(pg.Rect(0, 0, 800, 600), "background_level_4.png")
     ground_level_2 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_2.png")
     ground_level_3 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_3.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
@@ -508,8 +512,10 @@ def main():
     axe_right = BuyObject(pg.Rect(700, 460, 50, 50), "axe_right.png", "axe", 20)
     sword_left = BuyObject(pg.Rect(700, 460, 50, 50), "sword_left.jpg", "sword", 35)
     sword_right = BuyObject(pg.Rect(700, 460, 50, 50), "sword_right.jpg", "sword", 35)
+    shield = BuyObject(pg.Rect(700, 460, 50, 50), "shield.jpg", "shield", 50)
     sonic = BuyObject(pg.Rect(700, 430, 100, 130), "sonic_left.png", "Sonic", 40, True)
     tails = BuyObject(pg.Rect(700, 430, 100, 130), "tails_left.png", "Tails", 55, True)
+    knuckles = BuyObject(pg.Rect(700, 430, 100, 130), "knuckles_left.png", "Knuckles", 60, True)
 
     game_objects = [background, ladder, platform]
     coins = {}
@@ -531,11 +537,12 @@ def main():
     boss_time = EndScreen(None, 60, "Boss Time")
     level_two = EndScreen(None, 60, "Level 2")
     level_three = EndScreen(None, 60, "Level 3")
+    level_four = EndScreen(None, 60, "Level 4")
     boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", "eggman_boss_left_hit.gif", "eggman_boss_right_hit.gif", 3, 2)
 
     cur_level = 1
 
-    while health.health > 0 and cur_level <= 3:
+    while health.health > 0 and cur_level <= 4:
         click = False
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -633,22 +640,23 @@ def main():
                     no_money_modal.dismiss()
 
         # make the player climb or fall
-        if boss.active and not pause.is_paused:
-            on_ladder = player.is_on_ladder(boss_ladder_left) or player.is_on_ladder(boss_ladder_right)
-            on_top_of_ladder = player.is_on_top_of_ladder(boss_ladder_left) or player.is_on_top_of_ladder(boss_ladder_right)
-            if on_ladder:
-                if climb_direction == 1 or not on_top_of_ladder:
-                    player.climb(climb_direction)
+        if not pause.is_paused:
+            if boss.active:
+                on_ladder = player.is_on_ladder(boss_ladder_left) or player.is_on_ladder(boss_ladder_right)
+                on_top_of_ladder = player.is_on_top_of_ladder(boss_ladder_left) or player.is_on_top_of_ladder(boss_ladder_right)
+                if on_ladder:
+                    if climb_direction == 1 or not on_top_of_ladder:
+                        player.climb(climb_direction)
+                else:
+                    player.fall(None)
             else:
-                player.fall(None)
-        else:
-            on_ladder = player.is_on_ladder(ladder)
-            on_top_of_ladder = player.is_on_top_of_ladder(ladder)
-            if on_ladder:
-                if climb_direction == 1 or not on_top_of_ladder:
-                    player.climb(climb_direction)
-            else:
-                player.fall(platform)
+                on_ladder = player.is_on_ladder(ladder)
+                on_top_of_ladder = player.is_on_top_of_ladder(ladder)
+                if on_ladder:
+                    if climb_direction == 1 or not on_top_of_ladder:
+                        player.climb(climb_direction)
+                else:
+                    player.fall(platform)
 
         # make the player die
         if player.should_die():
@@ -698,6 +706,9 @@ def main():
                 elif pause.is_in_tails(mouse_pos[0], mouse_pos[1]):
                     player.set_player_image("tails_right.png", "tails_left.png", "tails_right.png", "tails_right.png", "tails_left.png", "tails_right.png", "tails_right.png")
                     pause.set_paused(False)
+                elif pause.is_in_knuckles(mouse_pos[0], mouse_pos[1]):
+                    player.set_player_image("knuckles_right.png", "knuckles_left.png", "knuckles_right.png", "knuckles_right.png", "knuckles_left.png", "knuckles_right.png", "knuckles_right.png")
+                    pause.set_paused(False)
 
         # draw the score and health and pause button
         score.draw(screen)
@@ -742,13 +753,13 @@ def main():
             score.reset()
             health.reset()
             boss.reset()
-            pg.display.update()
-            if pg.mixer:
-                pg.mixer.music.fadeout(1000)
-            pg.event.wait()
-            pg.time.wait(3000)
             if cur_level == 2:
                 level_two.draw(screen)
+                pg.display.update()
+                if pg.mixer:
+                    pg.mixer.music.fadeout(1000)
+                pg.event.wait()
+                pg.time.wait(3000)
                 game_objects = [background_level_2, ground_level_2, platform, ladder]
                 buy_objects = {2: [(axe_left, axe_right)], 4: [(sonic, sonic)]}
                 if pg.mixer:
@@ -757,9 +768,28 @@ def main():
                     pg.mixer.music.play(-1)
             elif cur_level == 3:
                 level_three.draw(screen)
+                pg.display.update()
+                if pg.mixer:
+                    pg.mixer.music.fadeout(1000)
+                pg.event.wait()
+                pg.time.wait(3000)
                 game_objects = [background_level_3, ground_level_3, platform, ladder]
+                buy_objects = {-2: [(sword_left, sword_right)], 4: [(tails, tails)]}
                 if pg.mixer:
                     music = os.path.join(main_dir, "data", "No Place For Straw Cowboys.ogg")
+                    pg.mixer.music.load(music)
+                    pg.mixer.music.play(-1)
+            elif cur_level == 4:
+                level_four.draw(screen)
+                pg.display.update()
+                if pg.mixer:
+                    pg.mixer.music.fadeout(1000)
+                pg.event.wait()
+                pg.time.wait(3000)
+                game_objects = [background_level_4, platform, ladder]
+                buy_objects = {4: [(shield, shield)], 5: [(knuckles, knuckles)]}
+                if pg.mixer:
+                    music = os.path.join(main_dir, "data", "Su Turno.ogg")
                     pg.mixer.music.load(music)
                     pg.mixer.music.play(-1)
 
