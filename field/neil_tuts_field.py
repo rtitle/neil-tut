@@ -33,6 +33,7 @@ class Player:
         self.bought_item_left_pos = None
         self.bought_item_right_pos = None
         self.arm_up = False
+        self.knock_direction = 0
 
     def set_player_image(self, standing, walking_left, walking_right, standing_arm_up, walking_left_arm_up, walking_right_arm_up, climbing):
         self.image_standing = load_image(standing, 100, 150)
@@ -145,6 +146,20 @@ class Player:
     def should_die(self):
         return self.total_fall >= 200
 
+    def is_on_octopus(self, octopus):
+        arr = self.camera.adjust(octopus.pos)
+        left = any(self.pos.right > o[1].left+25 and self.pos.right < o[1].right - 50 and self.pos.bottom > o[1].top and self.pos.top < o[1].bottom for o in arr)
+        right = any(self.pos.left < o[1].right-25 and self.pos.left > o[1].left + 50 and self.pos.bottom > o[1].top and self.pos.top < o[1].bottom for o in arr)
+        if left:
+            return -1
+        elif right:
+            return 1
+        else:
+            return 0
+
+    def set_knock_direction(self, knock_direction):
+        self.knock_direction = knock_direction
+
 class Boss:
     def __init__(self, pos, left_name, right_name, left_hit_name, right_hit_name, speed, health):
         self.pos = pos
@@ -225,6 +240,9 @@ class GameObject:
     def deactivate(self):
         self.active = False
 
+    def activate(self):
+        self.active = True
+
     def draw(self, camera, screen, frame = None):
         for o in camera.adjust(self.pos):
             if not frame or frame == o[0]:
@@ -238,6 +256,29 @@ class BuyObject(GameObject):
         self.item_name = item_name
         self.is_character = is_character
 
+class Enemy(GameObject):
+    def __init__(self, pos, name, speed, distance):
+        super().__init__(pos, name)
+        self.speed = speed
+        self.distance = distance
+        self.orig_pos = pos
+        self.direction = -1
+
+    def move(self):
+        self.pos = self.pos.move(self.speed * self.direction, 0)
+        if self.pos.left < self.orig_pos.left - self.distance or self.pos.left > self.orig_pos.left + self.distance:
+            self.direction *= -1
+
+    def change_direction(self):
+        self.direction *= -1
+
+class Barn(GameObject):
+    def __init__(self, pos, name):
+        super().__init__(pos, name)
+
+   # def is_on_player(self, player, offset):
+   #     return self.pos.inflate(offset, 0).colliderect(player.pos)
+
 class Camera:
     def __init__(self, background, speed):
         self.speed = speed
@@ -245,8 +286,8 @@ class Camera:
         self.pos = background.pos
         self.frame = 0
 
-    def move(self, direction):
-        self.pos = self.pos.move(self.speed * direction, 0)
+    def move2(self, direction, speed):
+        self.pos = self.pos.move(speed * direction, 0)
         if self.pos.left > 800:
             self.pos.left = 0
             self.frame += 1
@@ -256,6 +297,9 @@ class Camera:
             self.frame -= 1
             return True
         return False
+
+    def move(self, direction):
+        return self.move2(direction, self.speed)
 
     def adjust(self, rect):
         arr = [
@@ -485,6 +529,8 @@ def main():
 
     coin_sound = load_sound("netut_coin_sound_2.wav")
     grunt_sound = load_sound("netut_grunt.wav")
+    bounce_sound = load_sound("bounce.wav")
+    boing_sound = load_sound("boing.wav")
     if pg.mixer:
         music = os.path.join(main_dir, "data", "netut_song.wav")
         pg.mixer.music.load(music)
@@ -499,6 +545,7 @@ def main():
     background_level_2 = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_level_2.png")
     background_level_3 = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_level_3.png")
     background_level_4 = GameObject(pg.Rect(0, 0, 800, 600), "background_level_4.png")
+    background_level_5 = GameObject(pg.Rect(0, 0, 800, 600), "background_level_5.png")
     ground_level_2 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_2.png")
     ground_level_3 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_3.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
@@ -516,6 +563,10 @@ def main():
     sonic = BuyObject(pg.Rect(700, 430, 100, 130), "sonic_left.png", "Sonic", 40, True)
     tails = BuyObject(pg.Rect(700, 430, 100, 130), "tails_left.png", "Tails", 55, True)
     knuckles = BuyObject(pg.Rect(700, 430, 100, 130), "knuckles_left.png", "Knuckles", 60, True)
+    octopus = Enemy(pg.Rect(600, 385, 200, 200), "octopus.png", 1, 50)
+    octopus.deactivate()
+    barn = Barn(pg.Rect(0, 0, 800, 600), "barn_b.png")
+    barn.deactivate()
 
     game_objects = [background, ladder, platform]
     coins = {}
@@ -538,11 +589,20 @@ def main():
     level_two = EndScreen(None, 60, "Level 2")
     level_three = EndScreen(None, 60, "Level 3")
     level_four = EndScreen(None, 60, "Level 4")
+    level_five = EndScreen(None, 60, "Level 5")
     boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", "eggman_boss_left_hit.gif", "eggman_boss_right_hit.gif", 3, 2)
 
-    cur_level = 1
+    #cur_level = 1
 
-    while health.health > 0 and cur_level <= 4:
+    cur_level = 4
+    pause.add_pause_character("sonic_left.png", "Sonic")
+    pause.add_pause_character("tails_left.png", "Tails")
+    pause.add_pause_character("knuckles_left.png", "Knuckles")
+    boss.won = True
+
+    knock_distance = 0
+
+    while health.health > 0 and cur_level <= 5:
         click = False
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -562,14 +622,30 @@ def main():
             if boss.active:
                 player.move(direction, camera.speed)
             else:
-                if camera.move(direction):
-                    # reset the buy modal so it pops up again
-                    modal.buy_object_left = None
-                    modal.buy_object_right = None
+                if player.knock_direction == 0:
+                    if camera.move(direction):
+                        # reset the buy modal so it pops up again
+                        modal.buy_object_left = None
+                        modal.buy_object_right = None
+                else:
+                    camera.move2(player.knock_direction, camera.speed * 1)
+                    knock_distance += camera.speed * 2
+                    if knock_distance >= 400:
+                        player.set_knock_direction(0)
+                        knock_distance = 0
 
         # move the boss
         if boss.active and not pause.is_paused:
             boss.move()
+
+        # move the octopus
+        if octopus.active and not pause.is_paused:
+            octopus.move()
+            on_oct = player.is_on_octopus(octopus)
+            if on_oct != 0 and direction == 0:
+                player.set_knock_direction(on_oct)
+                if pg.mixer:
+                    bounce_sound.play()
 
         # display each static game object, including the background
         if not pause.is_paused:
@@ -715,17 +791,29 @@ def main():
         health.draw(screen)
         pause.draw(screen)
 
+        # Change to barn mode
+       
+        if cur_level == 5:
+            is_barn_on_player = pg.Rect(300, 0, 480, 600).colliderect(player.pos)
+            if not barn.active and space_pressed: # and is_barn_on_player:
+                barn.activate()
+            if barn.active:
+                barn.draw(camera, screen)
+
         # Change to boss mode
         if not boss.active and score.score >= 100:
             screen.fill(pg.Color("Black"))
             boss_time.draw(screen)
             boss.activate()
+            octopus.deactivate()
             if cur_level == 1:
                 game_objects = [background, boss_ladder_left, boss_ladder_right]
             elif cur_level == 2:
                 game_objects = [background_level_2, ground_level_2, boss_ladder_left, boss_ladder_right]
             elif cur_level == 3:
                 game_objects = [background_level_3, ground_level_3, boss_ladder_left, boss_ladder_right]
+            elif cur_level == 4:
+                game_objects = [background_level_4, boss_ladder_left, boss_ladder_right]
             coins = {}
             ring_boxes = {}
             buy_objects = {}
@@ -786,10 +874,24 @@ def main():
                     pg.mixer.music.fadeout(1000)
                 pg.event.wait()
                 pg.time.wait(3000)
-                game_objects = [background_level_4, platform, ladder]
+                game_objects = [background_level_4, platform, ladder, octopus]
+                octopus.activate()
                 buy_objects = {4: [(shield, shield)], 5: [(knuckles, knuckles)]}
                 if pg.mixer:
                     music = os.path.join(main_dir, "data", "Su Turno.ogg")
+                    pg.mixer.music.load(music)
+                    pg.mixer.music.play(-1)
+            elif cur_level == 5:
+                level_five.draw(screen)
+                pg.display.update()
+                if pg.mixer:
+                    pg.mixer.music.fadeout(1000)
+                pg.event.wait()
+                pg.time.wait(3000)
+                game_objects = [background_level_5, platform, ladder]
+                buy_objects = {}
+                if pg.mixer:
+                    music = os.path.join(main_dir, "data", "Humble Match.ogg")
                     pg.mixer.music.load(music)
                     pg.mixer.music.play(-1)
 
