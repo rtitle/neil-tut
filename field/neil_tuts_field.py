@@ -7,6 +7,7 @@ This game has stuff you can buy and characters.
 import os
 import time
 import pygame as pg
+import random
 
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 
@@ -37,6 +38,7 @@ class Player:
         self.knock_direction = 0
         self.hit_time = None
         self.is_enchanted_character = False
+        self.has_ultimate_god_sword = False
 
     def set_player_image(self, standing, walking_left, walking_right, standing_arm_up, walking_left_arm_up, walking_right_arm_up, climbing, width = 100, height = 150):
         self.image_standing = load_image(standing, width, height)
@@ -101,6 +103,8 @@ class Player:
     def buy_item(self, left, right):
         self.bought_item_left = left
         self.bought_item_right = right
+        if left.item_name == "Ultimate God Sword":
+            self.has_ultimate_god_sword = True
         self.set_buy_item_pos()
 
     def set_buy_item_pos(self):
@@ -109,6 +113,9 @@ class Player:
             if self.is_enchanted_character:
                 self.bought_item_left_pos = self.pos.move(-20, 25)
                 self.bought_item_right_pos = self.pos.move(180, 25)
+            elif self.has_ultimate_god_sword:
+                self.bought_item_left_pos = self.pos.move(-60, -25)
+                self.bought_item_right_pos = self.pos.move(65, -25)
             else:
                 self.bought_item_left_pos = self.pos.move(-30, 25)
                 self.bought_item_right_pos = self.pos.move(80, 25)
@@ -116,6 +123,9 @@ class Player:
             if self.is_enchanted_character:
                 self.bought_item_left_pos = self.pos.move(-20, 50)
                 self.bought_item_right_pos = self.pos.move(180, 50)
+            elif self.has_ultimate_god_sword:
+                self.bought_item_left_pos = self.pos.move(-60, 0)
+                self.bought_item_right_pos = self.pos.move(65, 0)
             else:
                 self.bought_item_left_pos = self.pos.move(-30, 50)
                 self.bought_item_right_pos = self.pos.move(80, 50)
@@ -185,7 +195,6 @@ class Player:
 
     def is_hit(self, time):
         return not self.hit_time or time - self.hit_time > 3000
-
 
 class Boss:
     def __init__(self, pos, left_name, right_name, left_hit_name, right_hit_name, speed, health):
@@ -317,6 +326,20 @@ class Barn(GameObject):
     def is_in_back_button(self, x, y):
         return self.back_rect.collidepoint(x, y)
 
+class Coin(GameObject):
+    def __init__(self, pos, name, fall_speed, delay):
+        super().__init__(pos, name)
+        self.fall_speed = fall_speed
+        self.delay = delay
+        self.create_time = get_time_millis()
+
+    def fall(self):
+        if get_time_millis() - self.create_time > self.delay:
+            self.pos = self.pos.move(0, self.fall_speed)
+            # fall to the ground
+            if self.pos.bottom > Player.ground:
+                self.pos.bottom = Player.ground
+
 class Camera:
     def __init__(self, background, speed):
         self.speed = speed
@@ -393,6 +416,39 @@ class Poster:
 
     def draw(self, screen):
         screen.blit(self.image, self.pos)
+
+class Credits:
+    def __init__(self, pos, name, font_name, font_size, bonus_level):
+        self.pos = pos
+        self.image = load_image(name, pos.width, pos.height)
+        self.bonus_level_image = load_image(bonus_level, 200, 70)
+        self.bonus_level_image_pos = self.bonus_level_image.get_rect().move(600, 500)
+        self.font = pg.font.Font(font_name, font_size)
+        self.font.set_bold(1)
+        self.msgs = ["Art: Neil Title", "Code: Rob Title", "Ideas: Neil Title", "Music: Patrick de Arteaga", "Executive Producer: Shaleen Title", "QA: Rob Title", "Plays It: Neil Title"]
+        self.active = False
+
+    def activate(self):
+        self.active = True
+        self.y = 600
+
+    def deactivate(self):
+        self.active = False
+
+    def draw(self, screen):
+        screen.blit(self.image, self.pos)
+        i = 1
+        for m in self.msgs:
+            self.font_image = self.font.render(m, 0, pg.Color("green"))
+            self.font_pos = self.font_image.get_rect().move(100, self.y + (50 * i))
+            screen.blit(self.font_image, self.font_pos)
+            i += 1
+        self.y -= 1
+        if self.y <= 300:
+            screen.blit(self.bonus_level_image, self.bonus_level_image_pos)
+
+    def is_in_bonus(self, x, y):
+        return self.bonus_level_image_pos.inflate(20, 20).collidepoint(x, y)
 
 class Health:
     def __init__(self, health, name):
@@ -543,6 +599,13 @@ class YesNoModal:
         pg.draw.rect(screen, pg.Color(173, 216, 230), self.no_pos.inflate(20, 20))
         screen.blit(self.no_image, self.no_pos)
 
+class BonusLevel:
+    def __init__(self):
+        self.active = False
+
+    def activate(self):
+        self.active = True
+
 def load_image(name, width, height):
     path = os.path.join(main_dir, "data", name)
     img = pg.image.load(path).convert_alpha()
@@ -598,8 +661,10 @@ def main():
     background_level_3 = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_level_3.png")
     background_level_4 = GameObject(pg.Rect(0, 0, 800, 600), "background_level_4.png")
     background_level_5 = GameObject(pg.Rect(0, 0, 800, 600), "background_level_5.png")
+    background_bonus_level = GameObject(pg.Rect(0, 0, 800, Player.ground), "background_bonus_level.png")
     ground_level_2 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_2.png")
     ground_level_3 = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_level_3.png")
+    ground_bonus_level = GameObject(pg.Rect(0, Player.ground, 800, 600 - Player.ground), "ground_bonus_level.png")
     ladder = GameObject(pg.Rect(400, 280, 100, 250), "ladder3.gif")
     boss_ladder_left = GameObject(pg.Rect(10, 280, 100, 250), "ladder3.gif")
     boss_ladder_right = GameObject(pg.Rect(690, 280, 100, 250), "ladder3.gif")
@@ -624,6 +689,10 @@ def main():
     enchanted_sword = BuyObject(pg.Rect(700, 460, 50, 50), "enchanted_sword.png", "Enchanted Sword", 55)
     final_boss_background = GameObject(pg.Rect(0, 0, 800, Player.ground), "final_boss.png")
     poster = Poster(pg.Rect(225, 0, 450, 600), "poster.jpg")
+    credits = Credits(pg.Rect(0, 0, 800, 600), "credits.png", None, 50, "waahh.png")
+    bonus = BonusLevel()
+    ultimate_god_sword_left = BuyObject(pg.Rect(700, 400, 100, 100), "ultimate_god_sword_left.gif", "Ultimate God Sword", 100)
+    ultimate_god_sword_right = BuyObject(pg.Rect(700, 400, 100, 100), "ultimate_god_sword_right.gif", "Ultimate God Sword", 100)
 
     game_objects = [background, ladder, platform]
     coins = {}
@@ -647,6 +716,7 @@ def main():
     level_three = EndScreen(None, 60, "Level 3")
     level_four = EndScreen(None, 60, "Level 4")
     level_five = EndScreen(None, 60, "Level 5")
+    bonus_level = EndScreen(None, 60, "Bonus Level")
     final_boss = EndScreen(None, 60, "Final Boss")
     you_win = EndScreen(None, 60, "You Win!")
     boss = Boss(pg.Rect(500, 150, 200, 150), "eggman_boss_left.gif", "eggman_boss_right.gif", "eggman_boss_left_hit.gif", "eggman_boss_right_hit.gif", 3, 2)
@@ -657,6 +727,7 @@ def main():
     #pause.add_pause_character("sonic_left.png", "Sonic")
     #pause.add_pause_character("tails_left.png", "Tails")
     #pause.add_pause_character("knuckles_left.png", "Knuckles")
+    #pause.add_pause_character("enchanted_character_left.png", "Enchanted Character")
     #boss.won = True
 
     knock_distance = 0
@@ -665,7 +736,7 @@ def main():
     final_boss_num_hits = 0
     space_pressed = False
 
-    while health.health > 0 and cur_level <= 5:
+    while (health.health > 0 and cur_level <= 7) or credits.active:
         click = False
         prev_space_pressed = space_pressed
         for event in pg.event.get():
@@ -720,7 +791,7 @@ def main():
                 g.draw(camera, screen)
 
         # display each stateful game object
-        if not boss.active and not pause.is_paused and not barn.active:
+        if not boss.active and not pause.is_paused and not barn.active and not bonus.active:
             for f in camera.visible_frames():
                 # populate infinite coins
                 if f not in coins:
@@ -739,13 +810,6 @@ def main():
                         score.update(1)
                     else:
                         c.draw(camera, screen, f)
-                # display buy objects
-                if f in buy_objects:
-                    for o in buy_objects[f]:
-                        if o[0].active:
-                            o[0].draw(camera, screen, f)
-                            if not modal.active and modal.buy_object_left != o[0] and player.is_on_object(o[0].pos, f):
-                                modal.set_active(o[0], o[1])
                 # display ring boxes
                 for o in ring_boxes[f]:
                     if player.is_on_object(o.pos, f) and player.arm_up and player.bought_item_left:
@@ -756,6 +820,37 @@ def main():
                     else:
                         o.draw(camera, screen, f)
 
+        # display buy objects
+        for f in camera.visible_frames():
+            if f in buy_objects:
+                for o in buy_objects[f]:
+                    if o[0].active:
+                        o[0].draw(camera, screen, f)
+                        if not modal.active and modal.buy_object_left != o[0] and player.is_on_object(o[0].pos, f):
+                            modal.set_active(o[0], o[1])
+
+        # display bonus level coins
+        if bonus.active:
+            for f in camera.visible_frames():
+                # populate infinite coins
+                if f not in coins or coins[f] == []:
+                    l = []
+                    for i in range(10):
+                        l.append(Coin(pg.Rect(500 + (i * 80), -40, 40, 40), "netut_coin.gif", random.random() * 6 + 1, random.random() * 3000))
+                    coins[f] = random.choices(l, k=6)
+                # display coins
+                for c in coins[f]:
+                    c.fall()
+                    if player.is_on_coin(c, f):
+                        if pg.mixer:
+                            coin_sound.play()
+                        coins[f].remove(c)
+                        score.update(1)
+                    elif c.pos.bottom == Player.ground:
+                        coins[f].remove(c)
+                    else:
+                        c.draw(camera, screen, f)
+            
         # display buy modal
         if modal.active and modal.buy_object_left:
             modal.set_message(f"Buy {modal.buy_object_left.item_name} for {modal.buy_object_left.price} coins?")
@@ -783,7 +878,7 @@ def main():
                     no_money_modal.dismiss()
 
         # make the player climb or fall
-        if not pause.is_paused:
+        if not pause.is_paused and not bonus.active:
             if boss.active or barn.active:
                 on_ladder = player.is_on_ladder(boss_ladder_left) or player.is_on_ladder(boss_ladder_right)
                 on_top_of_ladder = player.is_on_top_of_ladder(boss_ladder_left) or player.is_on_top_of_ladder(boss_ladder_right)
@@ -899,7 +994,7 @@ def main():
                         player.reset_pos()
 
         # Change to boss mode
-        if not boss.active and score.score >= 100:
+        if not boss.active and score.score >= 100 and not bonus.active:
             screen.fill(pg.Color("Black"))
             if cur_level == 5:
                 final_boss.draw(screen)
@@ -936,6 +1031,13 @@ def main():
                 pg.mixer.music.load(music)
                 pg.mixer.music.play(-1)
 
+        # Draw the credits
+        if credits.active:
+            credits.draw(screen)
+            if click and credits.is_in_bonus(mouse_pos[0], mouse_pos[1]):
+                boss.won = True
+                credits.deactivate()
+
         # Change to next level
         if boss.won or final_boss_num_hits == 10:
             cur_level += 1
@@ -946,8 +1048,11 @@ def main():
             player.reset_buy_item()
             camera.reset()
             score.reset()
+            #score.update(99)
             health.reset()
             boss.reset()
+            barn.deactivate()
+            final_boss_num_hits = 0
             if cur_level == 2:
                 level_two.draw(screen)
                 pg.display.update()
@@ -1006,16 +1111,32 @@ def main():
                 you_win.draw(screen)
                 pg.display.update()
                 if pg.mixer:
-                    pg.mixer.music.fadeout(1000)
+                    music = os.path.join(main_dir, "data", "Electronic Fantasy.ogg")
+                    pg.mixer.music.load(music)
+                    pg.mixer.music.play(-1)
                 pg.event.wait()
                 pg.time.wait(3000)
                 screen.fill(pg.Color("Black"))
                 poster.draw(screen)
                 pg.display.update()
                 pg.event.wait()
-                pg.time.wait(10000)
-                pg.quit()
-
+                pg.time.wait(5000)
+                credits.activate()
+            elif cur_level == 7:
+                bonus_level.draw(screen)
+                pg.display.update()
+                if pg.mixer:
+                    pg.mixer.music.fadeout(1000)
+                pg.event.wait()
+                pg.time.wait(3000)
+                game_objects = [background_bonus_level, ground_bonus_level]
+                buy_objects = {0: [(ultimate_god_sword_left, ultimate_god_sword_right)]}
+                bonus.activate()
+                if pg.mixer:
+                    music = os.path.join(main_dir, "data", "2nd Sonata - Malign Chords.ogg")
+                    pg.mixer.music.load(music)
+                    pg.mixer.music.play(-1)
+                
         pg.display.update()
         clock.tick(40)
 
